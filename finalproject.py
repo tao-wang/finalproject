@@ -7,6 +7,7 @@ import getopt
 
 DEBUG = False
 last_smiles = []
+CAPTURE = False
 
 def get_unit_masks(mask):
 	u_mask = mask[:,:,0].astype(np.float) / 255.0
@@ -86,58 +87,83 @@ if __name__ == '__main__':
 	cap = cv2.VideoCapture(0)
 
 	while True:
-	    ret, img = cap.read()
-	    # img = cv2.imread('portrait.jpg')
-	    img = cv2.resize(img, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_CUBIC)
-	    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+		ret, img = cap.read()
+		# img = cv2.imread('portrait.jpg')
+		img = cv2.resize(img, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_CUBIC)
+		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-	    # find faces
-	    faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+		debug_img = None
+		if CAPTURE:
+			debug_img = img.copy()
+			print "Original captured and saved"
+			cv2.imwrite("out_original.jpg", debug_img)
 
-	    for (x,y,w,h) in faces:
-	    	if DEBUG:
-		        cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+		# find faces
+		faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
-	        roi_gray = gray[y:y+h, x:x+w]
-	        roi_color = img[y:y+h, x:x+w]
+		for (x,y,w,h) in faces:
+			if DEBUG:
+				cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
 
-	        # eyes
-	        eyes = eye_cascade.detectMultiScale(roi_gray)
-	        eye_pair = best_eyes(eyes, (x,y,w,h))
-	        mean_y, mean_height = 0, 0
-	        for (ex,ey,ew,eh) in eye_pair:
-	        	if DEBUG:
-		        	cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
-	        	mean_y += ey + y
-	        	mean_height += eh
-	        mean_y = mean_y/2
-	        mean_height = mean_height/2
+			if CAPTURE:
+				print "Face captured"
+				cv2.rectangle(debug_img,(x,y),(x+w,y+h),(255,0,0),2)
 
-	        glasses_section = img[mean_y:mean_y+mean_height, x:x+w]
-	        img[mean_y:mean_y+mean_height, x:x+w] = run_blend(glasses_section, sunglasses, sunglasses_mask)
+			roi_gray = gray[y:y+h, x:x+w]
+			roi_color = img[y:y+h, x:x+w]
 
-	        # todo blend with face
+			# eyes
+			eyes = eye_cascade.detectMultiScale(roi_gray)
+			eye_pair = best_eyes(eyes, (x,y,w,h))
+			mean_y, mean_height = 0, 0
+			for (ex,ey,ew,eh) in eye_pair:
+				if DEBUG:
+					cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
+				if CAPTURE:
+					print "Eye captured"
+					cv2.rectangle(debug_img,(ex+x,ey+y),(ex+x+ew,ey+y+eh),(0,255,0),2)
+				mean_y += ey + y
+				mean_height += eh
+			mean_y = mean_y/2
+			mean_height = mean_height/2
 
-	        # hat
-	        hat_height = 2*h/3
-	        y_hat = y - hat_height/2
-	        hat_section = img[y_hat:y_hat+hat_height, x:x+w]
-	        img[y_hat:y_hat+hat_height, x:x+w] = run_blend(hat_section, hat, hat_mask)
+			glasses_section = img[mean_y:mean_y+mean_height, x:x+w]
+			img[mean_y:mean_y+mean_height, x:x+w] = run_blend(glasses_section, sunglasses, sunglasses_mask)
 
-	        # mustaches
-	        smiles = smile_cascade.detectMultiScale(roi_gray)
-	        last_smiles.insert(0, best_smile(smiles, (x,y,w,h)))
-	        if len(last_smiles) > 10:
-	        	last_smiles.pop()
-	        (sx,sy,sw,sh) = np.mean(last_smiles, axis=0).astype(np.int)
-	        if DEBUG:
-		    	cv2.rectangle(roi_color,(sx,sy),(sx+sw,sy+sh),(0,0,255),1)
-	    	roi_color[sy:sy+sh, sx:sx+sw] = run_blend(roi_color[sy:sy+sh, sx:sx+sw], mustache, mustache_mask)
+			# hat
+			hat_height = 2*h/3
+			y_hat = y - hat_height/2
+			hat_section = img[y_hat:y_hat+hat_height, x:x+w]
+			img[y_hat:y_hat+hat_height, x:x+w] = run_blend(hat_section, hat, hat_mask)
 
-	    cv2.imshow('webcam', img)
-	    k = cv2.waitKey(30) & 0xff
-	    if k == 27:
-	        break
+			# mustaches
+			smiles = smile_cascade.detectMultiScale(roi_gray)
+			last_smiles.insert(0, best_smile(smiles, (x,y,w,h)))
+			if len(last_smiles) > 1:
+				last_smiles.pop()
+			(sx,sy,sw,sh) = np.mean(last_smiles, axis=0).astype(np.int)
+			if DEBUG:
+				cv2.rectangle(roi_color,(sx,sy),(sx+sw,sy+sh),(0,0,255),1)
+
+			if CAPTURE:
+				print "Smile captured"
+				cv2.rectangle(debug_img,(sx+x,sy+y),(sx+x+sw,sy+y+sh),(0,0,255),1)
+
+			roi_color[sy:sy+sh, sx:sx+sw] = run_blend(roi_color[sy:sy+sh, sx:sx+sw], mustache, mustache_mask)
+
+			if CAPTURE:
+				print "Filter and debug images saved"
+				cv2.imwrite("out_filtered.jpg", img)
+				cv2.imwrite("out_debug.jpg", debug_img)
+		CAPTURE = False
+
+		cv2.imshow('webcam', img)
+		k = cv2.waitKey(30) & 0xff
+		if k == 27:
+			break
+		elif k == ord('c'):
+			print "Screen capture!"
+			CAPTURE = True
 
 	cap.release()
 	cv2.destroyAllWindows()
