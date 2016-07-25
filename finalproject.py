@@ -7,6 +7,7 @@ import getopt
 
 DEBUG = False
 last_smiles = []
+last_eyes = []
 CAPTURE = False
 
 def get_unit_masks(mask):
@@ -92,9 +93,8 @@ if __name__ == '__main__':
 		img = cv2.resize(img, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_CUBIC)
 		gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-		debug_img = None
+		debug_img = img.copy()
 		if CAPTURE:
-			debug_img = img.copy()
 			print "Original captured and saved"
 			cv2.imwrite("out_original.jpg", debug_img)
 
@@ -115,8 +115,10 @@ if __name__ == '__main__':
 			# eyes
 			eyes = eye_cascade.detectMultiScale(roi_gray)
 			eye_pair = best_eyes(eyes, (x,y,w,h))
+			if len(eye_pair) >= 2:
+				last_eyes = np.array(eye_pair)
 			mean_y, mean_height = 0, 0
-			for (ex,ey,ew,eh) in eye_pair:
+			for (ex,ey,ew,eh) in last_eyes:
 				if DEBUG:
 					cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
 				if CAPTURE:
@@ -157,7 +159,7 @@ if __name__ == '__main__':
 				cv2.imwrite("out_debug.jpg", debug_img)
 		CAPTURE = False
 
-		cv2.imshow('webcam', img)
+		cv2.imshow('webcam', np.concatenate((img, debug_img)))
 		k = cv2.waitKey(30) & 0xff
 		if k == 27:
 			break
